@@ -4,47 +4,97 @@ from models import Leave
 from qr_utils import generate_qr
 import os
 
+
 def student_dashboard(user, menu):
 
     db = SessionLocal()
     my = db.query(Leave).filter_by(student=user["username"]).all()
 
+    st.markdown(f"""
+    <div class="card glow">
+        <h2>👋 Welcome, {user["username"]}</h2>
+        <p style="color:#94a3b8;">SmartPass Elite Dashboard</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ================= DASHBOARD =================
     if menu == "Dashboard":
-        st.markdown('<div class="card glow"><h2>🎓 Student Control Center</h2></div>', unsafe_allow_html=True)
 
+        approved = len([l for l in my if l.status == "approved"])
+        pending = len([l for l in my if l.status == "pending"])
+        rejected = len([l for l in my if l.status == "rejected"])
+
+        c1, c2, c3 = st.columns(3)
+
+        c1.markdown(f'<div class="stat">✅ Approved<h2>{approved}</h2></div>', unsafe_allow_html=True)
+        c2.markdown(f'<div class="stat">⏳ Pending<h2>{pending}</h2></div>', unsafe_allow_html=True)
+        c3.markdown(f'<div class="stat">❌ Rejected<h2>{rejected}</h2></div>', unsafe_allow_html=True)
+
+    # ================= APPLY LEAVE =================
     elif menu == "Apply Leave":
-        st.markdown('<div class="card glow">', unsafe_allow_html=True)
 
-        reason = st.text_input("Reason")
-        if st.button("Generate SmartPass"):
-            new = Leave(student=user["username"], reason=reason, status="pending")
+        reason = st.text_input("Leave Reason")
+
+        if st.button("🎫 Generate SmartPass Request"):
+            new = Leave(
+                student=user["username"],
+                reason=reason,
+                status="pending"
+            )
             db.add(new)
             db.commit()
             st.success("Request Sent 🚀")
-            st.snow()
             st.rerun()
 
-        st.markdown('</div>', unsafe_allow_html=True)
-
+    # ================= SMARTPASS =================
     elif menu == "My SmartPass":
 
-        approved = [l for l in my if l.status == "approved"]
+        approved_leaves = [l for l in my if l.status == "approved"]
 
-        if approved:
-            latest = approved[-1]
+        if approved_leaves:
+
+            latest = approved_leaves[-1]
             file = f"qr_{latest.id}.png"
 
+            # ⭐ NEW REAL QR GENERATION
             if not os.path.exists(file):
-                generate_qr(f"{latest.student}-{latest.reason}", file)
+                generate_qr(
+                    latest.id,
+                    latest.student,
+                    latest.reason,
+                    file
+                )
 
-            st.markdown('<div class="card glow">', unsafe_allow_html=True)
-            st.subheader("🎫 LIVE SMARTPASS ID")
-            st.image(file, width=250)
-            st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown(f"""
+            <div class="card glow">
+                <h3>🎫 DIGITAL SMARTPASS</h3>
+                <p><b>Name:</b> {latest.student}</p>
+                <p><b>Reason:</b> {latest.reason}</p>
+                <p style="color:#22c55e;"><b>Status:</b> ACTIVE</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+            st.image(file, width=260)
 
         else:
             st.info("No Active SmartPass")
 
+    # ================= HISTORY =================
     elif menu == "History":
-        for l in my:
-            st.write(l.reason, l.status)
+
+        if not my:
+            st.info("No history yet.")
+        else:
+            for l in reversed(my):
+
+                col1, col2 = st.columns([3,1])
+
+                col1.markdown(f'<div class="card">📌 {l.reason}</div>', unsafe_allow_html=True)
+
+                if l.status == "approved":
+                    col2.success("APPROVED")
+                elif l.status == "rejected":
+                    col2.error("REJECTED")
+                else:
+                    col2.warning("PENDING")
+
